@@ -1,0 +1,7 @@
+--- # Poggit-CI Manifest. Open the CI at https://poggit.pmmp.io/ci/NTT1906/ItB64E
+branches:
+- master
+projects:
+  ItB64E:
+    path: ""
+...
