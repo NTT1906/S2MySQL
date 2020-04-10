@@ -1,0 +1,7 @@
+name: S2MySQL
+version: 1.0.0
+api: [3.0.0, 4.0.0]
+main: foxel\Main
+author: NTT
+load: POSTWORLD
+extensions: ['mysqli']
