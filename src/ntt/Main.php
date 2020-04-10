@@ -1,95 +1,92 @@
 <?php
 declare(strict_types=1);
-namespace ntt;
+namespace foxel;
 
-use pocketmine\plugin\Plugin;
+use pocketmine\event\player\PlayerJoinEvent;
+use pocketmine\event\player\PlayerKickEvent;
+use pocketmine\event\player\PlayerQuitEvent;
 use pocketmine\plugin\PluginBase;
-use pocketmine\event\Listener;
-use pocketmine\Player;
-use pocketmine\Utils\Config;
+use pocketmine\plugin\PluginException;
 
-class Main extends PluginBase implements Listener{
-	public $list = [];
-	public $file = [];
-	public $path;
-	public $filePhar;
-	public $imageType = ['jpeg', 'png', 'xpm', 'xbm', 'bmp', 'wbmp', 'webp'];
-
+class Main extends PluginBase{
+	
+	public $mySQL_BASE = [
+		'tip'=> "Don't edit confirm value, for port, set null for nothing",
+		'confirm' => 'true', //U can edit from down here
+	    'servername' => 'localhost',
+		'username' => 'username',
+		'password' => 'password',
+		'dbname' => 'myDB',
+		'port'=> null
+	];
+	public $mySQL_data;
+	public $msql;
+	
+	
+	
 	public function onEnable(){
-		$this->path = $this->getServer()->getDataPath();
-        $this->getServer()->getPluginManager()->registerEvents($this, $this);
-		$this->filePhar = $this->path . "ItB64E/";
-		if(!file_exists($this->filePhar)){
-			@mkdir($this->filePhar);
-			$this->getLogger()->info("§aFolder §fItB64E §aGenerated!");
-		}
-		if(!file_exists($this->filePhar . "Image-Input/")){
-			@mkdir($this->filePhar . "Image-Input/");
-			$this->getLogger()->info("§aFolder §fImage-Input §aGenerated!");
-		}
-		if(!file_exists($this->filePhar . "Data-Output/")){
-			@mkdir($this->filePhar . "Data-Output/");
-			$this->getLogger()->info("§aFolder §fData-Output §aGenerated!");
-		}
-		$this->getLogger()->info("§aPlugin enabled!");
-		$this->list = array_diff(@scandir($this->filePhar . "Image-Input/"), array('.', '..'));
-    	foreach($this->list as $f){
-    		$ff = strtolower(pathinfo($this->filePhar . "Image-Input/" . $f, PATHINFO_EXTENSION));
-			$name = @str_replace("." . $ff, '', $f);
-			$ImagePhar = $this->filePhar . "Image-Input/" . $f;
-			if(in_array($ff, $this->imageType)){
-				$data = $this->getDataFromImage($ImagePhar, $ff);
-				$data_output = $this->makeData($data, $name, $ff);
-				$this->getLogger()->info("§f" . $data_output . "§aGenerated!");
-			}else{
-				$this->getLogger()->info("§c$ff is not allowed image type");
-			}
-			@unlink($this->filePhar . "Image-Input/" . $f);
-		}
+		if(!extension_loaded('mysqli')){
+            throw new PluginException('§cMySQLi is not enabled!');
+        }
+		$this->mySQL_data = $this->getConfig();
+		if($this->mySQL_data->get('config') !== true) $this->mySQL_data->setAll($this->mySQL_BASE);
+		$this->mySQL_data->save();
+		$this->getLogger()->info('§aenabled!');
 	}
 	
-	public function getDataFromImage($file, $type){
-		switch ($type){
-	        case 'jpeg':
-	            $im = @imagecreatefromjpeg($file);
-	        break;
-	        case 'png':
-	            $im = @imagecreatefrompng($file);
-	        break;
-	        case 'xpm':
-	            $im = @imagecreatefromxpm($file);
-	        break;
-	        case 'xbm':
-	            $im = @imagecreatefromxbm($file);
-	        break;
-	        case 'bmp':
-	            $im = @imagecreatefrombmp($file);
-	        break;
-	        case 'wbmp':
-	            $im = @imagecreatefromwbmp($file);
-	        break;
-			case 'webp':
-	            $im = @imagecreatefromwebp($file);
-	        break;
-    	}   
-    	return $im;
-    }
-    
-    public function makeData($data, $name, $type){
-		$bytes = "";
-		$m = (int)@getimagesize($this->filePhar . "Image-Input/" . $name . "." . $type)[0];
-		$n = (int)@getimagesize($this->filePhar . "Image-Input/" . $name . "." . $type)[1];
-		for($y = 0; $y < $n; $y++){
-			for($x = 0; $x < $m; $x++){
-				$colorat = @imagecolorat($data, $x, $y);
-				$a = ((~((int)($colorat >> 24))) << 1) & 0xff;
-				$r = ($colorat >> 16) & 0xff;
-				$g = ($colorat >> 8) & 0xff;
-				$b = $colorat & 0xff;
-				$bytes .= chr($r) . chr($g) . chr($b) . chr($a);
+	public function sendData(){
+		$this->msql = new \mysqli($this->mySQL_data->get('servername'), $this->mySQL_data->get('username'), $this->mySQL_data->get('password'), $this->mySQL_data->get('dbname'), $this->mySQL_data->get('port'));
+		if($this->msql->connect_error){
+			$this->getLogger()->info('§cConnection failed: ' . mysqli_connect_error());
+			$this->setEnabled(false);
+		}else{
+			$this->getLogger()->info('§aConnection success!');
+		}
+		if($result = $this->msql->query("SHOW TABLES LIKE 'Data'")) {
+    		if(!$result->num_rows == 1) {
+				$this->msql->query('CREATE TABLE Data (count INT(6) NOT NULL)');
 			}
 		}
-		@file_put_contents($this->filePhar . "Data-Output/" . $name . ".txt" , @base64_encode($bytes));
-		return $name . ".txt";
+		$count = count($this->getServer()->getOnlinePlayers())+10;
+		if($this->msql->query("INSERT into Data (count) VALUES ('$count')") === false){
+			$this->getLogger()->info('§cError: ' . $this->msql->error);
+		}
+		$this->msql->close();
 	}
+	
+	public function getData(){/*U can paste this function to the site, remember to edit this for the site*/
+		$this->msql = new \mysqli($this->mySQL_data->get('servername'), $this->mySQL_data->get('username'), $this->mySQL_data->get('password'), $this->mySQL_data->get('dbname'), $this->mySQL_data->get('port'));
+		if($this->msql->connect_error){
+			$this->getLogger()->info('§cConnection failed: ' . mysqli_connect_error());
+			$this->setEnabled(false);
+		}else{
+			$this->getLogger()->info('§aConnection success!');
+		}
+		$data=[];
+		if($result = $this->msql->query('SELECT count FROM Data')){
+			if($result->num_rows > 0){
+				while($row = $result->fetch_assoc()){
+					$data[]=$row['count'];
+	    		}
+			$this->getLogger()->info('§aData: ' . max($data));
+	    	}else{
+				$this->getLogger()->info('§aData: null');
+			}
+		}
+		$this->msql->close();
+	}
+	
+	public function onJoin(PlayerJoinEvent $event){
+		$this->sendData();
+	}
+	public function onKick(PlayerKickEvent $event){
+		$this->sendData();
+	}
+	public function onQuit(PlayerQuitEvent $event){
+		$this->sendData();
+	}
+	
+    public function onDisable(){
+    	$this->getLogger()->info('§adisabled!');
+    }
 }
